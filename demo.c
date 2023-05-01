@@ -70,11 +70,12 @@ $e000   $2000  $1f40  Bitmap memory
 
 #define SET_COLOR_ITER ((200u - HILL_BASE) / 16 * 40)
 #define LINE_SIZE(x) (40u * (x)) 
-#define COLOR_LINE_START(x) (0xd000u + LINE_SIZE(x)) 
-#define COLOR_LINE_START_YX(y, x) (COLOR_LINE_START(y) + x) 
+#define COLOR_LINE_START(x) ((uint8_t*) 0xd000u + LINE_SIZE(x))
 #define TEXT_COLOR_LINE_START(x) (0xd800u + LINE_SIZE(x)) 
 
 void set_colors() {
+  register uint8_t i;
+
   __asm__("sei");
   // Writes to $d000 write to memory, not the VIC
   __asm__("lda $01");
@@ -84,54 +85,25 @@ void set_colors() {
   __asm__("sta $01");
 
   // Fill in the memory before the logo with spaces
-  __asm__("ldy #%b", LINE_SIZE(3));
-  __asm__("lda #0");
-  __asm__("loop_blank:");
-  __asm__("sta %w,y", COLOR_LINE_START(0));
-  __asm__("dey");
-  __asm__("bne loop_blank");  
+  memset(COLOR_LINE_START(0), 0, LINE_SIZE(3));
 
   // Text for the logo
-  __asm__("ldy #%b", LINE_SIZE(6));
-  __asm__("loop_logo:");
-  __asm__("tya");
-  __asm__("sta %w,y", COLOR_LINE_START(3));
-  __asm__("dey");
-  __asm__("bne loop_logo");
+  i = 240;
+  do {
+    ((uint8_t[240]) COLOR_LINE_START(3))[i] = i;
+  } while (--i > 0);
+
   // The bottom of the screen is filled with 0x40, so it needs
   // to be blank, so replace it
-  __asm__("lda #$F0");
-  __asm__("sta %w", COLOR_LINE_START_YX(3, 0x40));
+  *((uint8_t*) COLOR_LINE_START(3) + 0x40) = 0xF0;
 
   // Hill colour
-  __asm__("lda #$E0");
-  __asm__("ldy #%b", LINE_SIZE(4));
-  __asm__("loop_hill:");
-  __asm__("dey");
-  __asm__("sta %w,y", COLOR_LINE_START((HILL_BASE / 8) - 4));
-  __asm__("bne loop_hill");
+  memset(COLOR_LINE_START((HILL_BASE / 8) - 4), 0xE0, LINE_SIZE(4));
   
   // Ground colour
-  __asm__("lda #$40");
-  __asm__("ldy #%b", SET_COLOR_ITER);
-  __asm__("loop_ground:");
-  __asm__("dey");
-  __asm__("sta %w,y", COLOR_LINE_START(HILL_BASE / 8));
-  __asm__("sta %w,y", COLOR_LINE_START(25) - SET_COLOR_ITER);
-  __asm__("bne loop_ground");
-
-  // The secondary color memory, used for the horizontal lines
-  /*
-  __asm__("lda #$44");
-  __asm__("ldy #240");
-  __asm__("loop_altcolor:");
-  __asm__("dey");
-  __asm__("sta $D428,y"); // don't bother with the first line
-  __asm__("sta $D518,y");
-  __asm__("sta $D608,y");
-  __asm__("sta $D6f8,y");
-  __asm__("bne loop_altcolor");
-  */
+  memset(COLOR_LINE_START(HILL_BASE / 8), 0x40, 
+    COLOR_LINE_START(26) - COLOR_LINE_START(HILL_BASE / 8)
+  );
   
   // The logo as character data
   memcpy((void*) 0xE000, &arclogo_bits, 320U*48/8);
